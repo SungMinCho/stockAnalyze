@@ -23,24 +23,32 @@ class Wallet:
 
     def can_buy(self, t, corp):
         p = corp.get_buy_price(t)
+        if not p:
+            return 0
         ret = int(self.cash / p)
         return ret
 
     def get_total(self, t):
         ret = self.cash    
         for key, value in self.stocks.items():
-            ret += key.get_sell_price(t) * value
+            sp = key.get_sell_price(t)
+            if sp:
+                ret += sp * value
         return ret
 
     def buy(self, t, corp, amount):
         assert(amount <= self.can_buy(t, corp))
         p = corp.get_buy_price(t)
+        if not p:
+            return
         self.cash -= p*amount
         self.stocks[corp] += amount
 
     def sell(self, t, corp, amount):
         assert(amount <= self.stocks[corp])
         p = corp.get_sell_price(t)
+        if not p:
+            return
         self.cash += p*amount
         self.stocks[corp] -= amount    
 
@@ -79,4 +87,4 @@ def main():
         sim.run(t)
 
 if __name__ == "__main__":
-	main()
+    main()
