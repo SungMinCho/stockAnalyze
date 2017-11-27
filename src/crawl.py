@@ -34,9 +34,9 @@ def download_stock_codes(market=None, delisted=False):
 
     return df
 
-def get_company_info(code, fin_typ, freq_typ):
+def get_fund(code, fin_typ, freq_typ):
     url_tmp = 'http://companyinfo.stock.naver.com/v1/company/ajax/cF1001.aspx?cmp_cd=%s&fin_typ=%s&freq_typ=%s'
-    url = url_tmp % (str(code), str(fin_typ), str(freq_typ)) # 삼성전자, 4(IFRS 연결), Y:년 단위
+    url = url_tmp % (code, fin_typ, freq_typ) # 삼성전자, 4(IFRS 연결), Y:년 단위
 
     dfs = pd.read_html(url)
     df = dfs[0]
@@ -58,16 +58,16 @@ def get_kosdaq(code, start=date.fromordinal(date.today().toordinal()-365*5), end
 def pp(s):
     print(tabulate(s))
 
+def main():
+    ks_codes = download_stock_codes('kospi')
 
-ks_codes = download_stock_codes('kospi')
+    results = {}
 
-results = {}
+    for code in ks_codes.종목코드.head():
+        try:
+            results[code] = get_kospi(code)
+        except Exception as e:
+            pass
 
-for code in ks_codes.종목코드.head():
-    try:
-        results[code] = get_kospi(code)
-    except Exception as e:
-        pass
-
-df = pd.concat(results, axis=1)
-pp(df.loc[:,pd.IndexSlice[:, 'Adj Close']].tail()) 
+    df = pd.concat(results, axis=1)
+    pp(df.loc[:,pd.IndexSlice[:, 'Adj Close']].tail()) 
