@@ -71,3 +71,7 @@ def main():
 
     df = pd.concat(results, axis=1)
     pp(df.loc[:,pd.IndexSlice[:, 'Adj Close']].tail()) 
+
+
+if __name__ == "__main__":
+    main()
