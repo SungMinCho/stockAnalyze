@@ -3,10 +3,12 @@ from corp import *
 from datetime import *
 from collections import defaultdict
 import random
+import math
 
 class Simulation:
-    def __init__(self, universe_codes, _start, _end, _strategy, _wallet):
-        self.universe = [Corp(x, _start, _end) for x in universe_codes]
+    def __init__(self, universe_names_codes, _start, _end, _strategy, _wallet):
+        self.universe = [Corp(name, code, _start, _end) for (name, code) in universe_names_codes]
+        self.universe = [corp for corp in self.universe if corp.loading_success]
         self.start = _start
         self.end = _end
         self.strategy = _strategy
@@ -22,22 +24,24 @@ class Wallet:
         self.stocks = defaultdict(lambda:0)  # dictionary from corp to amount of stocks
 
     def can_buy(self, t, corp):
+        assert(corp.can_trade(t))
         p = corp.get_buy_price(t)
-        if not p:
-            return 0
+        if math.isnan(self.cash / p):
+            print('debug nan', self.cash, p)
         ret = int(self.cash / p)
         return ret
 
     def get_total(self, t):
         ret = self.cash    
         for key, value in self.stocks.items():
-            sp = key.get_sell_price(t)
+            sp = key.get_recent_sell_price(t)
             if sp:
                 ret += sp * value
         return ret
 
     def buy(self, t, corp, amount):
         assert(amount <= self.can_buy(t, corp))
+        assert(corp.can_trade(t))
         p = corp.get_buy_price(t)
         if not p:
             return
@@ -46,6 +50,7 @@ class Wallet:
 
     def sell(self, t, corp, amount):
         assert(amount <= self.stocks[corp])
+        assert(corp.can_trade(t))
         p = corp.get_sell_price(t)
         if not p:
             return
@@ -54,7 +59,8 @@ class Wallet:
 
     def liquidate(self, t):
         for key, value in self.stocks.items():
-            self.sell(t, key, value)
+            if key.can_trade(t):
+                self.sell(t, key, value)
 
     def log(self, t):
         tot = self.get_total(t)
@@ -65,7 +71,9 @@ class Wallet:
 def RandomStrategy(t, universe, wallet):
     random.shuffle(universe)
     wallet.liquidate(t)
-    wallet.buy(t, universe[0], wallet.can_buy(t, universe[0]))
+    target = universe[0]
+    if target.can_trade(t):
+        wallet.buy(t, universe[0], wallet.can_buy(t, universe[0]))
     wallet.log(t)
     
     
@@ -78,10 +86,11 @@ def main():
     end = date.today()
     wallet = Wallet(1000000)
 
-    ks_codes = download_stock_codes('kospi')
-    universe_codes = [code+".KS" for code in ks_codes.종목코드.head()]
+    ks = download_stock_codes('kospi')
+    ks_names_codes = ks[['회사명','종목코드']]
+    universe_names_codes = [(name, code+".KS") for (name, code) in ks_names_codes.head(20).itertuples(index=False)]
 
-    sim = Simulation(universe_codes, start, end, RandomStrategy, wallet)
+    sim = Simulation(universe_names_codes, start, end, RandomStrategy, wallet)
 
     for t in daterange(start,end):
         sim.run(t)
