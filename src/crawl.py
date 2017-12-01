@@ -78,20 +78,22 @@ def fnguideSoupToPandas(soup):
     #    rowSplit(row)
     #res = pd.concat([pd.DataFrame(rowSplit(row), columns=columns) for row in rows], ignore_index=True)
     res = pd.DataFrame([rowSplit(row) for row in rows], columns=columns)
-    print(res)
+    #print(res)
     return res
 
 
-def get_fund(code):
+def get_fund_helper(code, tableIndex):
     url = snapshot_url(code)
     f = urllib.request.urlopen(url).read()
     soup=BeautifulSoup(f, 'html.parser')
     tables = soup.find_all('table')
-    byYears = tables[11] # index could be changed
-    byQuarters = tables[12] # same here
+    return fnguideSoupToPandas(tables[tableIndex])
 
-    fundByYears = fnguideSoupToPandas(byYears)
-    fundByQuarters = fnguideSoupToPandas(byQuarters)
+def get_fund_byYear(code):
+    return get_fund_helper(code, 11)
+
+def get_fund_byQuarter(code):
+    return get_fund_helper(code, 12)
 
 def get_stock(code, start=date.fromordinal(date.today().toordinal()-365*5), end=date.today()):
     return pdr.DataReader(code, "yahoo", start, end)
@@ -123,7 +125,7 @@ def main():
     df = pd.concat(results, axis=1)
     pp(df.loc[:,pd.IndexSlice[:, 'Adj Close']].tail()) 
     """
-    get_fund('005930')
+    print(get_fund_byQuarter('005930'))
 
 if __name__ == "__main__":
     main()
