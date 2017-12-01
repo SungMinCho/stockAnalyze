@@ -6,6 +6,9 @@ from pandas_datareader.google.daily import GoogleDailyReader
 from tabulate import tabulate
 from datetime import *
 from yahoo_finance import Share
+import urllib.request
+from bs4 import BeautifulSoup
+import re
 
 #yf.pdr_override()
 
@@ -34,14 +37,61 @@ def download_stock_codes(market=None, delisted=False):
 
     return df
 
-def get_fund(code, fin_typ, freq_typ):
-    url_tmp = 'http://companyinfo.stock.naver.com/v1/company/ajax/cF1001.aspx?cmp_cd=%s&fin_typ=%s&freq_typ=%s'
-    url = url_tmp % (code, fin_typ, freq_typ) # 삼성전자, 4(IFRS 연결), Y:년 단위
+def snapshot_url(code):
+    code = code.split('.')[0]
+    return "http://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A"+ code + "&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701"
 
-    dfs = pd.read_html(url)
-    df = dfs[0]
-    df = df.set_index('주요재무정보')
-    return df
+
+def rowSplit(row):
+    #for txt in row.findAll(text=True):
+    try:
+        head = row.find('span', {'class' : 'txt_acd'})
+        head = head.text
+    except Exception as e:
+        head = row.find('th').find(text=True)
+    head = str(head).strip()
+
+    values = [head]
+    for txt in row.findAll(text=True):
+        pass
+        if re.match(r'\d[\d,.]*', txt):
+            values.append(float(str(txt).replace(',','')))
+    #print(values, len(values))
+    return values
+
+def fnguideSoupToPandas(soup):
+    trs = soup.find_all('tr')
+    cols = [t for t in trs if t.find_all('th', {'scope' : 'col'})]
+    rows = [t for t in trs if t.find_all('th', {'scope' : 'row'})]
+
+    assert(len(cols) == 2)    
+
+    cols = cols[1]
+    columns = ['subject']
+
+    for txt in cols.findAll(text=True):
+        if re.match(r'^(19|20)\d\d[- /.](0[1-9]|1[012])(\(E\))?', txt):
+            columns.append(str(txt))
+     
+    #print(columns, len(columns)) 
+    #for row in rows:
+    #    rowSplit(row)
+    #res = pd.concat([pd.DataFrame(rowSplit(row), columns=columns) for row in rows], ignore_index=True)
+    res = pd.DataFrame([rowSplit(row) for row in rows], columns=columns)
+    print(res)
+    return res
+
+
+def get_fund(code):
+    url = snapshot_url(code)
+    f = urllib.request.urlopen(url).read()
+    soup=BeautifulSoup(f, 'html.parser')
+    tables = soup.find_all('table')
+    byYears = tables[11] # index could be changed
+    byQuarters = tables[12] # same here
+
+    fundByYears = fnguideSoupToPandas(byYears)
+    fundByQuarters = fnguideSoupToPandas(byQuarters)
 
 def get_stock(code, start=date.fromordinal(date.today().toordinal()-365*5), end=date.today()):
     return pdr.DataReader(code, "yahoo", start, end)
@@ -59,6 +109,7 @@ def pp(s):
     print(tabulate(s))
 
 def main():
+    """
     ks_codes = download_stock_codes('kospi')
 
     results = {}
@@ -71,7 +122,11 @@ def main():
 
     df = pd.concat(results, axis=1)
     pp(df.loc[:,pd.IndexSlice[:, 'Adj Close']].tail()) 
-
+    """
+    get_fund('005930')
 
 if __name__ == "__main__":
     main()
+
+
+    
