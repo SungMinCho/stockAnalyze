@@ -6,6 +6,7 @@ from collections import defaultdict
 import random
 import math
 from logger import Logger
+from stuff import human_readable_float
 
 Log = Logger('log.txt')
 temp = [] 
@@ -52,10 +53,14 @@ class Wallet:
         self.original_cash = _cash
         self.cash = _cash
         self.stocks = defaultdict(lambda:0)  # dictionary from corp to amount of stocks
+        self.history = pd.DataFrame()
+        self.history['Corps'] = []
 
     def reset(self):
         self.cash = self.original_cash
         self.stocks = defaultdict(lambda:0)
+        self.history = pd.DataFrame()
+        self.history['Corps'] = []
 
     def can_buy(self, t, corp):
         assert(corp.can_trade(t))
@@ -95,6 +100,16 @@ class Wallet:
         self.cash -= p*amount
         self.stocks[corp] += amount
 
+        t = str(t)
+        if t not in list(self.history.columns):
+            self.history[t] = ""
+        name = corp.get_name()
+        if name not in list(self.history['Corps']):
+            self.history = self.history.append(pd.Series([name], index=['Corps']), ignore_index = True)
+        s = "-" + str(amount) + "*" + str(p)
+        self.history.loc[self.history['Corps'] == name, t] = s
+
+
     def sell(self, t, corp, amount):
         if amount > self.stocks[corp]:
             amount = self.stocks[corp]
@@ -105,6 +120,15 @@ class Wallet:
             return
         self.cash += p*amount
         self.stocks[corp] -= amount    
+
+        t = str(t)
+        if t not in list(self.history.columns):
+            self.history[t] = ""
+        name = corp.get_name()
+        if name not in list(self.history['Corps']):
+            self.history = self.history.append(pd.Series([name], index=['Corps']), ignore_index = True)
+        s = str(amount) + "*" + str(p)
+        self.history.loc[self.history['Corps'] == name, t] = s
 
     def sell_all(self, t, corp):
         self.sell(t, corp, self.stocks[corp])
@@ -155,6 +179,23 @@ class Wallet:
     def log(self, t):
         tot = self.get_total(t)
         Log.writeline(str(t) + " total : " + str(tot) + " gain/loss : " + str( round((tot-self.original_cash)/self.original_cash * 100, 2) ) + "%")
+
+    def log_final(self, t):
+        self.log(t)
+        self.liquidate(t)
+        def earned(row):
+            earned = 0
+            for t in list(self.history.columns):
+                if t == 'Corps':
+                    continue
+                try:
+                    earned += eval(row[t])
+                except Exception as e:
+                    pass
+            return human_readable_float(earned)
+
+        self.history['earned'] = self.history.apply(lambda row : earned(row), axis=1)
+        Log.writeline(self.history.to_string())
 
     def log_detail(self, t):
         self.log(t)
@@ -215,7 +256,7 @@ def RebalanceStrategyHelper(t, universe, wallet, context, portfolioBuilder, reba
             if not s.can_trade(t):
                 return # can't get cash
     wallet.match_portfolio(t, portfolio)
-    wallet.log_detail(t)  # logging
+    #wallet.log_detail(t)  # logging
     context['lastTradeDate'] = t
 
 def RebalanceStrategy(portfolioBuilder, rebalancePeriod):
@@ -342,17 +383,18 @@ def IntervalTest():
     i = 0
     n = 30
     p = 0.7
-    indexes = ['매출액', '영업이익', '당기순이익', '자산총계', '자본총계', '자본금', '영업이익률', 'ROA', 'ROE', 'EPS', 'BPS', 'DPS', 'PER', 'PBR', '배당수익률']
-    #indexes = ['DPS']
+    #indexes = ['매출액', '영업이익', '당기순이익', '자산총계', '자본총계', '자본금', '영업이익률', 'ROA', 'ROE', 'EPS', 'BPS', 'DPS', 'PER', 'PBR', '배당수익률']
+    indexes = ['DPS']
     simlen = len(indexes) * n 
     startTime = datetime.now()
     for index in indexes:
         for k in range(n):
             Log.writeline(index + ' ' + str(k) + '/' + str(n))
-            runWith(index, k, n, p, 365*6) # hold for entire time (5 years)
+            runWith(index, k, n, p, 365)
             earned = sim.wallet.earned(sim.end)
             earned = round(earned, 2)
             df = df.append({'index':index, 'k':k, 'n':n, 'earned':str(earned)+'%'}, ignore_index = True)
+            sim.wallet.log_final(sim.end)
             i += 1
             print('\r                                       ', end='')
             print('\rSimulation : ' + str(round(i / simlen * 100, 2)) + '%   elapsed time : ' + str(datetime.now() - startTime).split('.')[0], end='')
