@@ -42,7 +42,7 @@ def snapshot_url(code):
     return "http://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A"+ code + "&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701"
 
 
-def rowSplit(row):
+def rowSplit(row, colLen):
     #for txt in row.findAll(text=True):
     try:
         head = row.find('span', {'class' : 'txt_acd'})
@@ -57,6 +57,8 @@ def rowSplit(row):
         if re.match(r'\d[\d,.]*', txt):
             values.append(float(str(txt).replace(',','')))
     #print(values, len(values))
+    while len(values) < colLen:
+        values.append(float('nan'))
     return values
 
 def fnguideSoupToPandas(soup):
@@ -77,7 +79,7 @@ def fnguideSoupToPandas(soup):
     #for row in rows:
     #    rowSplit(row)
     #res = pd.concat([pd.DataFrame(rowSplit(row), columns=columns) for row in rows], ignore_index=True)
-    res = pd.DataFrame([rowSplit(row) for row in rows], columns=columns)
+    res = pd.DataFrame([rowSplit(row, len(columns)) for row in rows], columns=columns)
     #print(res)
     return res
 
@@ -87,7 +89,9 @@ def get_fund_helper(code, tableIndex):
     f = urllib.request.urlopen(url).read()
     soup=BeautifulSoup(f, 'html.parser')
     tables = soup.find_all('table')
-    return fnguideSoupToPandas(tables[tableIndex])
+    ret = fnguideSoupToPandas(tables[tableIndex])
+    ret = ret.set_index('subject')
+    return ret
 
 def get_fund_byYear(code):
     return get_fund_helper(code, 11)
@@ -127,8 +131,6 @@ def main():
     """
     print(get_fund_byQuarter('005930'))
 
+
 if __name__ == "__main__":
-    main()
-
-
-    
+   main()
